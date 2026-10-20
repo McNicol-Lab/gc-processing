@@ -7,6 +7,7 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = "~/Documents/R Code/gc-processing/")
 ```
 
 ```{r load-libraries}
@@ -16,17 +17,17 @@ library(janitor)
 library(stringi)
 library(broom)
 library(reshape2)
-source("functions/convert_ppm_min_flux.R")
+source("function/convert_ppm_min_flux.R")
 ```
 
 ```{r}
-files <- list.files("data/tidy/230720", pattern = "ppm")
-ghg_ppm <- lapply(paste0("data/tidy/230720/", files), read_csv) %>% bind_rows()
+files <- list.files("data/tidy/231014", pattern = "ppm")
+ghg_ppm <- lapply(paste0("data/tidy/231014/", files), read_csv) %>% bind_rows()
 ghg_ppm
 ```
 
 ```{r}
-min_elapsed <- read_csv("data/tidy/230720/230720_min_elapsed.csv")
+min_elapsed <- read_csv("data/tidy/231014/231014_min_elapsed.csv")
 ghg_ppm <- ghg_ppm %>% 
   mutate(ecosystem = case_when(
     grepl("P", rep) ~ paste0(ecosystem, "P"),
@@ -37,7 +38,7 @@ ghg_ppm <- ghg_ppm %>%
   mutate(pref = as.numeric(pref),
          suff = as.numeric(suff)) %>% 
   left_join(min_elapsed, by = c("ecosystem", "pref", "suff", "timepoint")) %>% 
-  mutate(date_collected = "230720",
+  mutate(date_collected = "231014",
          ecosystem = case_when(
            is.na(pref) ~ paste0(ecosystem, "P"),
            TRUE ~ ecosystem
@@ -61,7 +62,7 @@ ghg_ppm %>%
   strip.background = element_blank(),
   strip.text.x = element_blank()
 )
-ggsave("data/diagnostics/230720_prairie_co2_lm.png")
+ggsave("data/diagnostics/231014_prairie_co2_lm.png")
 ```
 
 ### CO2 - North Woodland 
@@ -73,11 +74,11 @@ ghg_ppm %>%
   filter(ecosystem == "NWd") %>% 
   
   ## Code to filter out bad time points
-  mutate(co2_ppm = case_when(
-    pref == 2 & suff == 3 & timepoint %in% c("t3", "t4") ~ NA,
-    pref == 3 & suff %in% c(1,2) & timepoint %in% c("t3", "t4") ~ NA,
-    TRUE ~ co2_ppm
-  )) %>%
+  # mutate(co2_ppm = case_when(
+  #   pref == 2 & suff == 3 & timepoint %in% c("t3", "t4") ~ NA,
+  #   pref == 3 & suff %in% c(1,2) & timepoint %in% c("t3", "t4") ~ NA,
+  #   TRUE ~ co2_ppm
+  # )) %>%
   
   ggplot(aes(x = min_elapsed, y = co2_ppm)) + 
   geom_point() + 
@@ -89,7 +90,7 @@ ghg_ppm %>%
   strip.background = element_blank(),
   strip.text.x = element_blank()
 )
-ggsave("data/diagnostics/230720_north_woodland_co2_lm.png")
+ggsave("data/diagnostics/231014_north_woodland_co2_lm.png")
 ```
 
 ### CO2 - South Woodland 
@@ -100,11 +101,11 @@ visualize linear co2 fits
 ghg_ppm %>% 
   filter(ecosystem == "SWd") %>% 
   
-  ## Code to filter out bad time points\
-  mutate(co2_ppm = case_when(
-    pref == 3 & suff %in% c(3) & timepoint == "t4" ~ NA,
-    TRUE ~ co2_ppm
-  )) %>%
+  # ## Code to filter out bad time points\
+  # mutate(co2_ppm = case_when(
+  #   pref == 3 & suff %in% c(3) & timepoint == "t4" ~ NA,
+  #   TRUE ~ co2_ppm
+  # )) %>%
   
   ggplot(aes(x = min_elapsed, y = co2_ppm)) + 
   geom_point() + 
@@ -116,7 +117,7 @@ ghg_ppm %>%
   strip.background = element_blank(),
   strip.text.x = element_blank()
 )
-ggsave("data/diagnostics/230720_south_woodland_co2_lm.png")
+ggsave("data/diagnostics/231014_south_woodland_co2_lm.png")
 ```
 
 ### CO2 - Wetlands 
@@ -143,7 +144,7 @@ ghg_ppm %>%
   strip.background = element_blank(),
   strip.text.x = element_blank()
 )
-ggsave("data/diagnostics/230720_wetland_co2_lm.png")
+ggsave("data/diagnostics/231014_wetland_co2_lm.png")
 ```
 fit linear co2 models
 
@@ -151,18 +152,18 @@ fit linear co2 models
 ghg_ppm %>%
     filter(ecosystem %in% c("Pr", "NWd", "SWd", "Wt")) %>% 
     ## Code to filter out bad time points
-  mutate(
-    co2_ppm = case_when(
-    ecosystem == "NWd" & pref == 3 & suff %in% c(1, 2) & timepoint == "t3" ~ NA,
-    TRUE ~ co2_ppm),
-  ) %>% 
+  # mutate(
+  #   co2_ppm = case_when(
+  #   ecosystem == "NWd" & pref == 3 & suff %in% c(1, 2) & timepoint == "t3" ~ NA,
+  #   TRUE ~ co2_ppm),
+  #) %>% 
   nest_by(ecosystem, pref, suff) %>% 
   mutate(lm_co2 = list(lm(co2_ppm ~ min_elapsed, data = data)),
          lm_ch4 = list(lm(ch4_ppm ~ min_elapsed, data = data)),
          lm_n2o = list(lm(n2o_ppm ~ min_elapsed, data = data))) %>%
   summarize(tidy(lm_co2)) %>% 
   filter(term == "min_elapsed") %>% 
-  write_csv("data/final/230720_co2_fluxes.csv")
+  write_csv("data/final/231014_co2_fluxes.csv")
 ```
 
 
@@ -183,7 +184,7 @@ ghg_ppm %>%
   strip.background = element_blank(),
   strip.text.x = element_blank()
 )
-ggsave("data/diagnostics/230720_prairie_ch4_lm.png")
+ggsave("data/diagnostics/231014_prairie_ch4_lm.png")
 ```
 
 ### CH4 - North Woodland
@@ -212,7 +213,7 @@ ghg_ppm %>%
   strip.background = element_blank(),
   strip.text.x = element_blank()
 )
-ggsave("data/diagnostics/230720_north_woodland_ch4_lm.png")
+ggsave("data/diagnostics/231014_north_woodland_ch4_lm.png")
 ```
 
 ### CH4 - South Woodland
@@ -239,7 +240,7 @@ ghg_ppm %>%
   strip.background = element_blank(),
   strip.text.x = element_blank()
 )
-ggsave("data/diagnostics/230720_south_woodland_ch4_lm.png")
+ggsave("data/diagnostics/231014_south_woodland_ch4_lm.png")
 ```
 
 ### CH4 - Wetlands 
@@ -249,12 +250,12 @@ visualize linear ch4 fits
 ```{r}
 ghg_ppm %>% 
   filter(ecosystem == "Wt") %>% 
-  
-  # ## Code to filter out bad time points\
-  # mutate(co2_ppm = case_when(
-  #   pref == 2 & suff %in% c(4) & timepoint %in% c("t1", "t3") ~ NA,
-  #   TRUE ~ co2_ppm
-  # )) %>%
+
+  ## Code to filter out bad time points\
+  mutate(ch4_ppm = case_when(
+    pref == 2 & suff %in% c(3) & timepoint %in% c("t2") ~ NA,
+    TRUE ~ ch4_ppm
+  )) %>%
   
   ggplot(aes(x = min_elapsed, y = ch4_ppm)) + 
   geom_point() + 
@@ -266,7 +267,7 @@ ghg_ppm %>%
   strip.background = element_blank(),
   strip.text.x = element_blank()
 )
-ggsave("data/diagnostics/230720_wetland_ch4_lm.png")
+ggsave("data/diagnostics/231014_wetland_ch4_lm.png")
 ```
 
 
@@ -277,19 +278,16 @@ ghg_ppm %>%
     filter(ecosystem %in% c("Pr", "NWd", "SWd", "Wt")) %>% 
   ## Code to filter out bad time points
   mutate(ch4_ppm = case_when(
-    ecosystem == "NWd" & pref == 1 & suff %in% c(2, 3, 4) & timepoint == "t3" ~ NA,
-    ecosystem == "NWd" & pref == 2 & suff %in% c(2, 3) & timepoint == "t3" ~ NA,
-    ecosystem == "NWd" & pref == 3 & suff %in% c(1, 2) & timepoint == "t3" ~ NA,
-    ecosystem == "SWd" & pref == 3 & suff %in% c(2) & timepoint == "t4" ~ NA,
+    ecosystem == "Wt" & pref == 2 & suff %in% c(3) & timepoint == "t2" ~ NA,
     TRUE ~ ch4_ppm
-  )) %>% 
+  )) %>%
   nest_by(ecosystem, pref, suff) %>% 
   mutate(lm_co2 = list(lm(co2_ppm ~ min_elapsed, data = data)),
          lm_ch4 = list(lm(ch4_ppm ~ min_elapsed, data = data)),
          lm_n2o = list(lm(n2o_ppm ~ min_elapsed, data = data))) %>%
   summarize(tidy(lm_ch4)) %>% 
   filter(term == "min_elapsed") %>% 
-  write_csv("data/final/230720_ch4_fluxes.csv")
+  write_csv("data/final/231014_ch4_fluxes.csv")
 ```
 
 ### N2O - Prairie
@@ -309,7 +307,7 @@ ghg_ppm %>%
   strip.background = element_blank(),
   strip.text.x = element_blank()
 )
-ggsave("data/diagnostics/230720_prairie_n2o_lm.png")
+ggsave("data/diagnostics/231014_prairie_n2o_lm.png")
 ```
 
 ### N2O - North Woodland
@@ -338,7 +336,7 @@ ghg_ppm %>%
   strip.background = element_blank(),
   strip.text.x = element_blank()
 )
-ggsave("data/diagnostics/230720_north_woodland_n2o_lm.png")
+ggsave("data/diagnostics/231014_north_woodland_n2o_lm.png")
 ```
 
 ### N2O - South Woodland
@@ -365,7 +363,7 @@ ghg_ppm %>%
   strip.background = element_blank(),
   strip.text.x = element_blank()
 )
-ggsave("data/diagnostics/230720_south_woodland_n2o_lm.png")
+ggsave("data/diagnostics/231014_south_woodland_n2o_lm.png")
 ```
 
 ### N2O - Wetlands 
@@ -376,11 +374,11 @@ visualize linear n2o fits
 ghg_ppm %>% 
   filter(ecosystem == "Wt") %>% 
   
-  # ## Code to filter out bad time points\
-  # mutate(co2_ppm = case_when(
-  #   pref == 2 & suff %in% c(4) & timepoint %in% c("t1", "t3") ~ NA,
-  #   TRUE ~ co2_ppm
-  # )) %>%
+  ## Code to filter out bad time points\
+  mutate(n2o_ppm = case_when(
+    pref == 2 & suff %in% c(3) & timepoint %in% c("t2") ~ NA,
+    TRUE ~ n2o_ppm
+  )) %>%
   
   ggplot(aes(x = min_elapsed, y = n2o_ppm)) + 
   geom_point() + 
@@ -392,7 +390,7 @@ ghg_ppm %>%
   strip.background = element_blank(),
   strip.text.x = element_blank()
 )
-ggsave("data/diagnostics/230720_wetland_n2o_lm.png")
+ggsave("data/diagnostics/231014_wetland_n2o_lm.png")
 ```
 
 
@@ -401,37 +399,35 @@ fit linear n2o models
 ```{r}
 ghg_ppm %>%
     filter(ecosystem %in% c("Pr", "NWd", "SWd", "Wt")) %>% 
-  ## Code to filter out bad time points\
+  # Code to filter out bad time points\
   mutate(n2o_ppm = case_when(
-    ecosystem == "NWd" & pref == 2 & suff == 3 & timepoint %in% c("t3", "t4") ~ NA,
-    ecosystem == "NWd" & pref == 3 & suff %in% c(1,2) & timepoint %in% c("t3", "t4") ~ NA,
-    ecosystem == "SWd" & pref == 3 & suff %in% c(3) & timepoint == "t4" ~ NA,
+    ecosystem == "Wt" & pref == 2 & suff == 3 & timepoint %in% c("t2") ~ NA,
     TRUE ~ n2o_ppm
-  )) %>% 
+  )) %>%
   nest_by(ecosystem, pref, suff) %>% 
   mutate(lm_co2 = list(lm(co2_ppm ~ min_elapsed, data = data)),
          lm_ch4 = list(lm(ch4_ppm ~ min_elapsed, data = data)),
          lm_n2o = list(lm(n2o_ppm ~ min_elapsed, data = data))) %>%
   summarize(tidy(lm_n2o)) %>% 
   filter(term == "min_elapsed") %>% 
-  write_csv("data/final/230720_n2o_fluxes.csv")
+  write_csv("data/final/231014_n2o_fluxes.csv")
 ```
 
 ## get fluxes to plot
 
 ```{r read}
-co2 <- read_csv("data/final/230720_co2_fluxes.csv") %>% 
+co2 <- read_csv("data/final/231014_co2_fluxes.csv") %>% 
   mutate(gas = "co2")
-ch4 <- read_csv("data/final/230720_ch4_fluxes.csv") %>% 
+ch4 <- read_csv("data/final/231014_ch4_fluxes.csv") %>% 
   mutate(gas = "ch4")
-n2o <- read_csv("data/final/230720_n2o_fluxes.csv") %>% 
+n2o <- read_csv("data/final/231014_n2o_fluxes.csv") %>% 
   mutate(gas = "n2o")
 ```
 
 get chamber temps and vols
 
 ```{r chamber-temps}
-chamber_temps <- read_csv("data/tidy/230720/230720_chamber_temps.csv")
+chamber_temps <- read_csv("data/tidy/231014/231014_chamber_temps.csv")
 chamber_vols <- read_csv("data/tidy/2023_chamber_vols.csv")
 ```
 
@@ -455,7 +451,7 @@ fluxes
 save final flux data
 
 ```{r}
-write_csv(fluxes, "data/final/230720_fluxes.csv")
+write_csv(fluxes, "data/final/231014_fluxes.csv")
 ```
 
 ### CO2 - Prairie Photosynthesis
@@ -468,11 +464,11 @@ ghg_ppm %>%
   # filter(ecosystem == "NWdP") %>% 
   # arrange(pref, suff)
 
-   ## Code to filter out bad time points
-  mutate(co2_ppm = case_when(
-    timepoint == "t3" ~ NA,
-    TRUE ~ co2_ppm
-  )) %>%
+  #  ## Code to filter out bad time points
+  # mutate(co2_ppm = case_when(
+  #   timepoint == "t3" ~ NA,
+  #   TRUE ~ co2_ppm
+  # )) %>%
   
   ggplot(aes(x = min_elapsed, y = co2_ppm)) + 
   geom_point() + 
@@ -484,7 +480,7 @@ ghg_ppm %>%
   strip.background = element_blank(),
   # strip.text.x = element_blank()
 ) + labs(title = "Dark Respiration")
-ggsave("data/diagnostics/230720_prairie_co2p_lm_dark.png")
+ggsave("data/diagnostics/231014_prairie_co2p_lm_dark.png")
 ```
 
 visualize linear co2 fits net CO2 flux
@@ -495,11 +491,11 @@ ghg_ppm %>%
   # filter(ecosystem == "NWdP") %>% 
   # arrange(pref, suff)
 
-   ## Code to filter out bad time points
-  mutate(co2_ppm = case_when(
-    timepoint == "t3" ~ NA,
-    TRUE ~ co2_ppm
-  )) %>%
+  #  ## Code to filter out bad time points
+  # mutate(co2_ppm = case_when(
+  #   timepoint == "t3" ~ NA,
+  #   TRUE ~ co2_ppm
+  # )) %>%
   
   ggplot(aes(x = min_elapsed, y = co2_ppm)) + 
   geom_point() + 
@@ -511,7 +507,7 @@ ghg_ppm %>%
   strip.background = element_blank(),
   # strip.text.x = element_blank()
 ) + labs(title = "Dark Respiration")
-ggsave("data/diagnostics/230720_prairie_co2p_lm_dark.png")
+ggsave("data/diagnostics/231014_prairie_co2p_lm_dark.png")
 ```
 
 fit linear co2 models
@@ -529,20 +525,20 @@ ghg_ppm %>%
   mutate(lm_co2 = list(lm(co2_ppm ~ min_elapsed, data = data))) %>%
   summarize(tidy(lm_co2)) %>% 
   filter(term == "min_elapsed") %>% 
-  write_csv("data/final/230720_co2p_fluxes.csv")
+  write_csv("data/final/231014_co2p_fluxes.csv")
 ```
 
 get chamber temps and vols
 
 ```{r chamber-temps}
-chamber_temps <- read_csv("data/tidy/230720/230720_chamber_temps.csv")
+chamber_temps <- read_csv("data/tidy/231014/231014_chamber_temps.csv")
 chamber_vols <- read_csv("data/tidy/2023_chamber_vols.csv")
 ```
 
 ## get fluxes to plot
 
 ```{r read}
-co2 <- read_csv("data/final/230720_co2p_fluxes.csv") %>% 
+co2 <- read_csv("data/final/231014_co2p_fluxes.csv") %>% 
   mutate(gas = "co2")
 ```
 
@@ -563,5 +559,5 @@ fluxes
 save final flux data
 
 ```{r}
-write_csv(fluxes, "data/final/230720_photosynthesis.csv")
+write_csv(fluxes, "data/final/231014_photosynthesis.csv")
 ```

@@ -1,0 +1,52 @@
+---
+title: "snippet-flux-qc"
+author: "Gavin McNicol"
+date: "2026-09-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Flux QC 
+
+**Logic table:**
+
+Situation,                              CO2,  CH4,  N2O
+CO2 p > 0.05 or CO2 flux > 9*,           NA,   NA,   NA
+"CO2 is good, but CH4/N2O p > 0.05",    keep, 0,    0
+CO2 is good and CH4/N2O p ≤ 0.05,       keep, keep, keep
+
+*Set very high woodland CO2 emissions (> 9) related to ant burrow to `NA`
+
+```{r flux-qc}
+data <- data %>%
+  group_by(date, cover, site, transect, rep) %>%
+  mutate(
+    # Extract the CO2 values for this chamber measurement
+    co2_p     = p.value[gas == "co2"][1],
+    co2_flux  = flux[gas == "co2"][1],
+    
+    # Flag bad analytical process / injection based on CO2
+    bad_injection = (is.na(co2_p) | co2_p > 0.05) | 
+                    (!is.na(co2_flux) & co2_flux > 9)
+  ) %>%
+  mutate(
+    flux = case_when(
+      # Everything from a bad injection becomes NA
+      bad_injection ~ NA_real_,
+      
+      # CO2 that passed the checks keeps its value
+      gas == "co2" ~ flux,
+      
+      # CH4 / N2O with non-significant slope → 0 (only if injection was good)
+      gas %in% c("ch4", "n2o") & p.value > 0.05 ~ 0,
+      
+      # Otherwise keep the calculated flux
+      TRUE ~ flux
+    )
+  ) %>%
+  select(-co2_p, -co2_flux, -bad_injection) %>%
+  ungroup()
+```

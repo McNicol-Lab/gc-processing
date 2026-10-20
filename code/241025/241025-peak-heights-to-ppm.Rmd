@@ -1,0 +1,541 @@
+---
+title: "Gas Fluxes: GC Peak Height Extraction"
+author: "Michael Yonker"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = "~/R Code/gc-processing/")
+```
+
+Purpose: Process GC data to get soil chamber GHG fluxes from JWP
+
+Data:
+1. Find data
+  - .txt files within the directory
+
+
+```{r libraries, message=F, include=F}
+library(tidyverse)
+library(lubridate)
+library(janitor)
+library(stringi)
+library(broom)
+library(reshape2)
+```
+
+## TIMEPOINTS
+
+```{r get-sampling-dates, include=F}
+# dates
+getwd()
+```
+
+## t0
+
+```{r list-files}
+files <- list.files("./data/gc-raw/20241025/t0", pattern = ".txt")
+length(files)
+```
+
+get the sample log
+
+**To get the sample log I need to export a subset of the full .xlsx sample log data as a .csv file**
+
+```{r read-sample-log, warning=F,message=F}
+sample_log <- read_csv("./data/gc-raw/20241025/t0/sample_log.csv", na = c("N/A", "<NA>")) %>% 
+  janitor::clean_names() %>% 
+  mutate(date_collected = mdy(date_collected),
+         gc_run_date = mdy(gc_run_date)) %>% 
+  mutate(row = row_number(),
+         timepoint = "t0")
+  #slice_head(n=73)
+
+glimpse(sample_log)
+
+#sample_log <- slice_head(sample_log, n=73)
+```
+
+read in gc files
+
+```{r read-gc-files, output = F, echo = F}
+data <- lapply(paste0("./data/gc-raw/20241025/t0/", files), read_delim, delim = "\t",skip = 80, n_max = 15)
+data[[1]]
+```
+
+get CO2 peak heights
+
+```{r co2-heights}
+peak_heights <- bind_rows(data, .id = "row") %>%
+  filter(Name %in% c("CO2","CH4","N2O")) %>%
+  select(row, Name, Height) %>%
+  mutate(row = as.numeric(row), Height = as.numeric(Height)) %>%
+  pivot_wider(id_cols = row, names_from = Name, values_from = Height, values_fn = max)
+
+```
+
+bind sample log to peak heights
+```{r}
+gc_data_tidy <- left_join(peak_heights, sample_log, by = "row") %>%
+  # mutate(ecosystem = ifelse(is.na(ecosystem), "STD", ecosystem), date_collected=mdy("11/11/2023")) %>% 
+  select(row, date_collected, timepoint, gc_run_date, filename, ecosystem, rep = chamber_number, 2, 3, 4)
+
+gc_data_tidy
+```
+
+```{r}
+write_csv(gc_data_tidy, "./data/tidy/241025/241025_t0_gc_peak_heights.csv")
+```
+
+## Re-read in tidy data
+
+```{r, message=FALSE}
+gc_data_tidy <- read_csv("./data/tidy/241025/241025_t0_gc_peak_heights.csv")
+```
+
+
+get std stats across all runs
+
+```{r}
+std_heights <- gc_data_tidy %>% 
+  filter(ecosystem == "STD" & !is.na(gc_run_date)) %>% 
+  group_by(gc_run_date) %>% 
+  summarize(mean_co2_height = mean(CO2, na.rm = T),
+            mean_ch4_height = mean(CH4, na.rm = T),
+            mean_n2o_height = mean(N2O, na.rm = T),
+            
+            co2_precision = sd(CO2, na.rm = T)/mean_co2_height*100,
+            ch4_precision = sd(CH4, na.rm = T)/mean_ch4_height*100,
+            n2o_precision = sd(N2O, na.rm = T)/mean_n2o_height*100) 
+std_heights
+```
+
+combine std heights with unknowns
+
+```{r}
+unknown_std_heights <- gc_data_tidy %>% 
+  filter(ecosystem != "STD") %>% 
+  left_join(std_heights, by = "gc_run_date")
+```
+
+calculate ghg in ppm
+
+```{r}
+ghg_ppm <- unknown_std_heights %>% 
+  mutate(co2_ppm = CO2 * (998/mean_co2_height),
+         ch4_ppm = CH4 * (10.2/mean_ch4_height),
+         n2o_ppm = N2O * (1/mean_n2o_height)) 
+ghg_ppm
+```
+
+write data
+
+```{r}
+write_csv(ghg_ppm, "./data/tidy/241025/241025_t0_ghg_ppm.csv")
+```
+
+
+## t1
+
+```{r list-files}
+files <- list.files("./data/gc-raw/20241025/t1", pattern = ".txt")
+length(files)
+```
+
+get the sample log
+
+**To get the sample log I need to export a subset of the full .xlsx sample log data as a .csv file**
+
+```{r read-sample-log, warning=F,message=F}
+sample_log <- read_csv("./data/gc-raw/20241025/t1/sample_log.csv", na = c("N/A", "<NA>")) %>% 
+  janitor::clean_names() %>% 
+  mutate(date_collected = mdy(date_collected),
+         gc_run_date = mdy(gc_run_date)) %>% 
+  mutate(row = row_number(),
+         timepoint = "t1")
+
+glimpse(sample_log)
+```
+
+read in gc files
+
+```{r read-gc-files, output = F, echo = F}
+data <- lapply(paste0("./data/gc-raw/20241025/t1/", files), read_delim, delim = "\t",skip = 80, n_max = 15)
+data[[43]]
+```
+
+get ghg peak heights
+
+```{r peak-heights}
+peak_heights <- bind_rows(data, .id = "row") %>%
+  filter(Name %in% c("CO2","CH4","N2O"))%>%
+  select(row, Name, Height) %>%
+  mutate(row = as.numeric(row), Height = as.numeric(Height)) %>%
+  pivot_wider(id_cols = row, names_from = Name, values_from = Height, values_fn = max)
+
+```
+
+bind sample log to peak heights
+```{r}
+gc_data_tidy <- left_join(peak_heights, sample_log, by = "row") %>%
+  # mutate(ecosystem = ifelse(is.na(ecosystem), "STD", ecosystem), date_collected=mdy("11/11/2023")) %>% 
+  select(row, date_collected, timepoint, gc_run_date, filename, ecosystem, rep = chamber_number, 2, 3, 4)
+
+gc_data_tidy
+```
+
+```{r}
+write_csv(gc_data_tidy, "./data/tidy/241025/241025_t1_gc_peak_heights.csv")
+```
+
+## Re-read in tidy data
+
+```{r, message=FALSE}
+gc_data_tidy <- read_csv("./data/tidy/241025/241025_t1_gc_peak_heights.csv")
+```
+
+
+get std stats across all runs
+
+```{r}
+std_heights <- gc_data_tidy %>% 
+  filter(ecosystem == "STD" & !is.na(gc_run_date)) %>% 
+  group_by(gc_run_date) %>% 
+  summarize(mean_co2_height = mean(CO2, na.rm = T),
+            mean_ch4_height = mean(CH4, na.rm = T),
+            mean_n2o_height = mean(N2O, na.rm = T),
+            
+            co2_precision = sd(CO2, na.rm = T)/mean_co2_height*100,
+            ch4_precision = sd(CH4, na.rm = T)/mean_ch4_height*100,
+            n2o_precision = sd(N2O, na.rm = T)/mean_n2o_height*100) 
+std_heights
+```
+
+combine std heights with unknowns
+
+```{r}
+unknown_std_heights <- gc_data_tidy %>% 
+  filter(ecosystem != "STD") %>% 
+  left_join(std_heights, by = "gc_run_date")
+```
+
+calculate ghg in ppm
+
+```{r}
+ghg_ppm <- unknown_std_heights %>% 
+  mutate(co2_ppm = CO2 * (998/mean_co2_height),
+         ch4_ppm = CH4 * (10.2/mean_ch4_height),
+         n2o_ppm = N2O * (1/mean_n2o_height)) 
+ghg_ppm
+```
+
+write data
+
+```{r}
+write_csv(ghg_ppm, "./data/tidy/241025/241025_t1_ghg_ppm.csv")
+```
+
+## t2
+
+```{r list-files}
+files <- list.files("./data/gc-raw/20241025/t2", pattern = ".txt")
+length(files)
+```
+
+get the sample log
+
+**To get the sample log I need to export a subset of the full .xlsx sample log data as a .csv file**
+
+```{r read-sample-log, warning=F,message=F}
+sample_log <- read_csv("./data/gc-raw/20241025/t2/sample_log.csv", na = c("N/A", "<NA>")) %>% 
+  janitor::clean_names() %>% 
+  mutate(date_collected = mdy(date_collected),
+         gc_run_date = mdy(gc_run_date)) %>% 
+  mutate(row = row_number(),
+         timepoint = "t2")
+  #slice_head(n=69)
+
+glimpse(sample_log)
+```
+
+read in gc files
+
+```{r read-gc-files, output = F, echo = F}
+data <- lapply(paste0("./data/gc-raw/20241025/t2/", files), read_delim, delim = "\t",skip = 80, n_max = 15)
+data[[1]]
+```
+
+get ghg peak heights
+
+```{r peak-heights}
+peak_heights <- bind_rows(data, .id = "row") %>%
+  filter(Name %in% c("CO2","CH4","N2O"))%>%
+  select(row, Name, Height) %>%
+  mutate(row = as.numeric(row), Height = as.numeric(Height)) %>%
+  pivot_wider(id_cols = row, names_from = Name, values_from = Height, values_fn = max)
+
+```
+
+bind sample log to peak heights
+```{r}
+gc_data_tidy <- left_join(peak_heights, sample_log, by = "row") %>%
+  # mutate(ecosystem = ifelse(is.na(ecosystem), "STD", ecosystem), date_collected=mdy("11/11/2023")) %>% 
+  select(row, date_collected, timepoint, gc_run_date, filename, ecosystem, rep = chamber_number, 2, 3, 4)
+
+gc_data_tidy
+```
+
+```{r}
+write_csv(gc_data_tidy, "./data/tidy/241025/241025_t2_gc_peak_heights.csv")
+```
+
+## Re-read in tidy data
+
+```{r, message=FALSE}
+gc_data_tidy <- read_csv("./data/tidy/241025/241025_t2_gc_peak_heights.csv")
+```
+
+
+get std stats across all runs
+
+```{r}
+std_heights <- gc_data_tidy %>% 
+  filter(ecosystem == "STD" & !is.na(gc_run_date)) %>% 
+  group_by(gc_run_date) %>% 
+  summarize(mean_co2_height = mean(CO2, na.rm = T),
+            mean_ch4_height = mean(CH4, na.rm = T),
+            mean_n2o_height = mean(N2O, na.rm = T),
+            
+            co2_precision = sd(CO2, na.rm = T)/mean_co2_height*100,
+            ch4_precision = sd(CH4, na.rm = T)/mean_ch4_height*100,
+            n2o_precision = sd(N2O, na.rm = T)/mean_n2o_height*100) 
+std_heights
+```
+
+combine std heights with unknowns
+
+```{r}
+unknown_std_heights <- gc_data_tidy %>% 
+  filter(ecosystem != "STD") %>% 
+  left_join(std_heights, by = "gc_run_date")
+```
+
+calculate ghg in ppm
+
+```{r}
+ghg_ppm <- unknown_std_heights %>% 
+  mutate(co2_ppm = CO2 * (998/mean_co2_height),
+         ch4_ppm = CH4 * (10.2/mean_ch4_height),
+         n2o_ppm = N2O * (1/mean_n2o_height)) 
+ghg_ppm
+```
+
+write data
+
+```{r}
+write_csv(ghg_ppm, "./data/tidy/241025/241025_t2_ghg_ppm.csv")
+```
+
+## t3
+
+```{r list-files}
+files <- list.files("./data/gc-raw/20241025/t3", pattern = ".txt")
+length(files)
+```
+
+get the sample log
+
+**To get the sample log I need to export a subset of the full .xlsx sample log data as a .csv file**
+
+```{r read-sample-log, warning=F,message=F}
+sample_log <- read_csv("./data/gc-raw/20241025/t3/sample_log.csv", na = c("N/A", "<NA>")) %>% 
+  janitor::clean_names() %>% 
+  mutate(date_collected = mdy(date_collected),
+         gc_run_date = mdy(gc_run_date)) %>% 
+  mutate(row = row_number(),
+         timepoint = "t3")
+
+glimpse(sample_log)
+```
+
+read in gc files
+
+```{r read-gc-files, output = F, echo = F}
+data <- lapply(paste0("./data/gc-raw/20241025/t3/", files), read_delim, delim = "\t",skip = 80, n_max = 15)
+data[[1]]
+```
+
+get ghg peak heights
+
+```{r peak-heights}
+peak_heights <- bind_rows(data, .id = "row") %>%
+  filter(Name %in% c("CO2","CH4","N2O"))%>%
+  select(row, Name, Height) %>%
+  mutate(row = as.numeric(row), Height = as.numeric(Height)) %>%
+  pivot_wider(id_cols = row, names_from = Name, values_from = Height, values_fn = max)
+
+```
+
+bind sample log to peak heights
+```{r}
+gc_data_tidy <- left_join(peak_heights, sample_log, by = "row") %>%
+  # mutate(ecosystem = ifelse(is.na(ecosystem), "STD", ecosystem), date_collected=mdy("11/11/2023")) %>% 
+  select(row, date_collected, timepoint, gc_run_date, filename, ecosystem, rep = chamber_number, 2, 3, 4)
+
+gc_data_tidy
+```
+
+```{r}
+write_csv(gc_data_tidy, "./data/tidy/241025/241025_t3_gc_peak_heights.csv")
+```
+
+## Re-read in tidy data
+
+```{r, message=FALSE}
+gc_data_tidy <- read_csv("./data/tidy/241025/241025_t3_gc_peak_heights.csv")
+```
+
+
+get std stats across all runs
+
+```{r}
+std_heights <- gc_data_tidy %>% 
+  filter(ecosystem == "STD" & !is.na(gc_run_date)) %>% 
+  group_by(gc_run_date) %>% 
+  summarize(mean_co2_height = mean(CO2, na.rm = T),
+            mean_ch4_height = mean(CH4, na.rm = T),
+            mean_n2o_height = mean(N2O, na.rm = T),
+            
+            co2_precision = sd(CO2, na.rm = T)/mean_co2_height*100,
+            ch4_precision = sd(CH4, na.rm = T)/mean_ch4_height*100,
+            n2o_precision = sd(N2O, na.rm = T)/mean_n2o_height*100) 
+std_heights
+```
+
+combine std heights with unknowns
+
+```{r}
+unknown_std_heights <- gc_data_tidy %>% 
+  filter(ecosystem != "STD") %>% 
+  left_join(std_heights, by = "gc_run_date")
+```
+
+calculate ghg in ppm
+
+```{r}
+ghg_ppm <- unknown_std_heights %>% 
+  mutate(co2_ppm = CO2 * (998/mean_co2_height),
+         ch4_ppm = CH4 * (10.2/mean_ch4_height),
+         n2o_ppm = N2O * (1/mean_n2o_height)) 
+ghg_ppm
+```
+
+write data
+
+```{r}
+write_csv(ghg_ppm, "./data/tidy/241025/241025_t3_ghg_ppm.csv")
+```
+
+## t4
+
+```{r list-files}
+files <- list.files("./data/gc-raw/20241025/t4", pattern = ".txt")
+length(files)
+```
+
+get the sample log
+
+**To get the sample log I need to export a subset of the full .xlsx sample log data as a .csv file**
+
+```{r read-sample-log, warning=F,message=F}
+sample_log <- read_csv("./data/gc-raw/20241025/t4/sample_log.csv", na = c("N/A", "<NA>")) %>% 
+  janitor::clean_names() %>% 
+  mutate(date_collected = mdy(date_collected),
+         gc_run_date = mdy(gc_run_date)) %>% 
+  mutate(row = row_number(),
+         timepoint = "t4")
+  #slice_head(n=84)
+
+glimpse(sample_log)
+```
+
+read in gc files
+
+```{r read-gc-files, output = F, echo = F}
+data <- lapply(paste0("./data/gc-raw/20241025/t4/", files), read_delim, delim = "\t",skip = 80, n_max = 15)
+data[[2]]
+```
+
+get ghg peak heights
+
+```{r peak-heights}
+peak_heights <- bind_rows(data, .id = "row") %>%
+  filter(Name %in% c("CO2","CH4","N2O"))%>%
+  select(row, Name, Height) %>%
+  mutate(row = as.numeric(row), Height = as.numeric(Height)) %>%
+  pivot_wider(id_cols = row, names_from = Name, values_from = Height, values_fn = max)
+
+```
+
+bind sample log to peak heights
+```{r}
+gc_data_tidy <- left_join(peak_heights, sample_log, by = "row") %>%
+  # mutate(ecosystem = ifelse(is.na(ecosystem), "STD", ecosystem), date_collected=mdy("11/11/2023")) %>% 
+  select(row, date_collected, timepoint, gc_run_date, filename, ecosystem, rep = chamber_number, 2, 3, 4)
+
+gc_data_tidy
+```
+
+```{r}
+write_csv(gc_data_tidy, "./data/tidy/241025/241025_t4_gc_peak_heights.csv")
+```
+
+## Re-read in tidy data
+
+```{r, message=FALSE}
+gc_data_tidy <- read_csv("./data/tidy/241025/241025_t4_gc_peak_heights.csv")
+```
+
+
+get std stats across all runs
+
+```{r}
+std_heights <- gc_data_tidy %>% 
+  filter(ecosystem == "STD" & !is.na(gc_run_date)) %>% 
+  group_by(gc_run_date) %>% 
+  summarize(mean_co2_height = mean(CO2, na.rm = T),
+            mean_ch4_height = mean(CH4, na.rm = T),
+            mean_n2o_height = mean(N2O, na.rm = T),
+            
+            co2_precision = sd(CO2, na.rm = T)/mean_co2_height*100,
+            ch4_precision = sd(CH4, na.rm = T)/mean_ch4_height*100,
+            n2o_precision = sd(N2O, na.rm = T)/mean_n2o_height*100) 
+std_heights
+```
+
+combine std heights with unknowns
+
+```{r}
+unknown_std_heights <- gc_data_tidy %>% 
+  filter(ecosystem != "STD") %>% 
+  left_join(std_heights, by = "gc_run_date")
+```
+
+calculate ghg in ppm
+
+```{r}
+ghg_ppm <- unknown_std_heights %>% 
+  mutate(co2_ppm = CO2 * (998/mean_co2_height),
+         ch4_ppm = CH4 * (10.2/mean_ch4_height),
+         n2o_ppm = N2O * (1/mean_n2o_height)) 
+ghg_ppm
+```
+
+write data
+
+```{r}
+write_csv(ghg_ppm, "./data/tidy/241025/241025_t4_ghg_ppm.csv")
+```
+
