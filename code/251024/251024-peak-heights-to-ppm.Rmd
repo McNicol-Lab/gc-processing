@@ -33,7 +33,7 @@ library(reshape2)
 getwd()
 ```
 
-## t0
+## all timepoints
 
 ```{r list-files}
 files <- list.files("./data/gc-raw/20251024/run1", pattern = ".txt")
